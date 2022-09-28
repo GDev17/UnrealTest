@@ -10,6 +10,7 @@
 #include <Kismet/KismetMathLibrary.h>
 #include <Kismet/GameplayStatics.h>
 #include "Engine/DataTable.h"
+#include "Engine/EngineTypes.h"
 #include "MyProjectCharacter.generated.h"
 
 
@@ -102,5 +103,19 @@ public:
 		UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
 		void TakeDamageFromProjectile(float damage);
 
+
+		// Simple cooldown functions - When you press LMB for projectiles.
+		FTimerHandle CoolDownTimerHandle;
+		
+		// Allow this variable access to blueprints, So widgets can access it and display accordingly
+		UPROPERTY(replicated, BlueprintReadOnly)
+			bool AllowToShoot = true;
+
+		void StartCoolDownTimer(float ResetDelay);
+
+		void ResetTimerValue();
+		
+
+		virtual void GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const;
 };
 

@@ -92,41 +92,62 @@ void AMyProjectCharacter::SetupPlayerInputComponent(class UInputComponent* Playe
 }
 
 
+void AMyProjectCharacter::ResetTimerValue()
+{
+	AllowToShoot = true;
+}
+
+void AMyProjectCharacter::StartCoolDownTimer(float ResetDelay)
+{
+	AllowToShoot = false;
+	GetWorld()->GetTimerManager().SetTimer(CoolDownTimerHandle, this, &AMyProjectCharacter::ResetTimerValue, ResetDelay, false, ResetDelay);
+}
+
+
 
 // Server -> Client -> RPC
 void AMyProjectCharacter::SpawnProjectile_Implementation()
 {
+	
 	SpawnProjectileClient_Implementation();
 
 	// Can be used later, for server only event
 	if (IsLocallyControlled())
 	{
-
 	}
-	
 }
-
 
 void AMyProjectCharacter::SpawnProjectileClient_Implementation()
 {
+	// do nothing if cooldown is active
+	if (AllowToShoot == false)
+	{
+		return;
+	}
 
 	FProjectileDataStruct* dataTableData = ProjectileDataTable->FindRow<FProjectileDataStruct>("HighScore", "Context", true);
 
-	UWorld* p_World = GetWorld();
-
-	bool bValid = IsValid(p_World) && IsValid(ProjectileToSpawnClass);
-
-	if (bValid && dataTableData->bEnabledProjectileSpawnSystem)
+	// cooldown timer start
+	if (AllowToShoot)
 	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Owner = this;
-		SpawnParams.Instigator = GetInstigator();
+		StartCoolDownTimer(dataTableData->CooldownDelayForShoot);
 
-		FVector SpawnLocation = (GetActorForwardVector() * 50) + GetActorLocation();
-		AProjectileActor* Projectile = p_World->SpawnActor<AProjectileActor>(ProjectileToSpawnClass, SpawnLocation, GetActorRotation(), SpawnParams);
-		if (Projectile)
+		UWorld* p_World = GetWorld();
+
+		bool bValid = IsValid(p_World) && IsValid(ProjectileToSpawnClass);
+
+		if (bValid && dataTableData->bEnabledProjectileSpawnSystem)
 		{
-			// Do something - 
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.Owner = this;
+			SpawnParams.Instigator = GetInstigator();
+
+			FVector SpawnLocation = (GetActorForwardVector() * 50) + GetActorLocation();
+			AProjectileActor* Projectile = p_World->SpawnActor<AProjectileActor>(ProjectileToSpawnClass, SpawnLocation, GetActorRotation(), SpawnParams);
+			if (Projectile)
+			{
+				// Do something - 
+			}
 		}
 	}
 }
@@ -192,13 +213,17 @@ void AMyProjectCharacter::InitDataTable()
 // AI service
 void AMyProjectCharacter::SetFaceTowardsPlayer()
 {
-	FVector PlayerLocation =  UGameplayStatics::GetPlayerCharacter(this, 0)->GetActorLocation();
-	if (!IsPlayerControlled())
+	return;
+	if (auto player = UGameplayStatics::GetPlayerCharacter(this, 0))
 	{
-		// this means AI
-		;
-		FRotator TargetRotation = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), PlayerLocation);
-		SetActorRotation(TargetRotation);
+		FVector PlayerLocation = player->GetActorLocation();
+		if (!IsPlayerControlled())
+		{
+			// this means AI
+			;
+			FRotator TargetRotation = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), PlayerLocation);
+			SetActorRotation(TargetRotation);
+		}
 	}
 }
 
@@ -206,4 +231,11 @@ void AMyProjectCharacter::SetFaceTowardsPlayer()
 void AMyProjectCharacter::TakeDamageFromProjectile_Implementation(float damage)
 {
 	// this will be called in blueprint
+}
+
+
+void AMyProjectCharacter::GetLifetimeReplicatedProps(TArray< FLifetimeProperty >& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AMyProjectCharacter, AllowToShoot);
 }

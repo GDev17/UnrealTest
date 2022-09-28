@@ -61,6 +61,9 @@ struct FProjectileDataStruct :  public FTableRowBase
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 		float DamageAmoutForEnemy;
 
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+		float CooldownDelayForShoot;
+
 };
 
 UCLASS()
