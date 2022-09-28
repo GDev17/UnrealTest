@@ -45,6 +45,21 @@ AMyProjectCharacter::AMyProjectCharacter()
 
 	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
 	// are set in the derived blueprint asset named MyCharacter (to avoid direct content references in C++)
+
+	//
+
+	bReplicates = true;
+	SetReplicateMovement(true) ;
+	
+
+	InitDataTable();
+}
+
+
+void AMyProjectCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	SetFaceTowardsPlayer();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -60,6 +75,12 @@ void AMyProjectCharacter::SetupPlayerInputComponent(class UInputComponent* Playe
 	PlayerInputComponent->BindAxis("MoveForward", this, &AMyProjectCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &AMyProjectCharacter::MoveRight);
 
+	// Left Mouse
+
+	PlayerInputComponent->BindAction("LeftMouse", IE_Pressed, this, &AMyProjectCharacter::SpawnProjectile);
+
+	//
+
 	// We have 2 versions of the rotation bindings to handle different kinds of devices differently
 	// "turn" handles devices that provide an absolute delta, such as a mouse.
 	// "turnrate" is for devices that we choose to treat as a rate of change, such as an analog joystick
@@ -68,35 +89,49 @@ void AMyProjectCharacter::SetupPlayerInputComponent(class UInputComponent* Playe
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
 	PlayerInputComponent->BindAxis("LookUpRate", this, &AMyProjectCharacter::LookUpAtRate);
 
-	// handle touch devices
-	PlayerInputComponent->BindTouch(IE_Pressed, this, &AMyProjectCharacter::TouchStarted);
-	PlayerInputComponent->BindTouch(IE_Released, this, &AMyProjectCharacter::TouchStopped);
-
-	// VR headset functionality
-	PlayerInputComponent->BindAction("ResetVR", IE_Pressed, this, &AMyProjectCharacter::OnResetVR);
 }
 
 
-void AMyProjectCharacter::OnResetVR()
+
+// Server -> Client -> RPC
+void AMyProjectCharacter::SpawnProjectile_Implementation()
 {
-	// If MyProject is added to a project via 'Add Feature' in the Unreal Editor the dependency on HeadMountedDisplay in MyProject.Build.cs is not automatically propagated
-	// and a linker error will result.
-	// You will need to either:
-	//		Add "HeadMountedDisplay" to [YourProject].Build.cs PublicDependencyModuleNames in order to build successfully (appropriate if supporting VR).
-	// or:
-	//		Comment or delete the call to ResetOrientationAndPosition below (appropriate if not supporting VR)
-	UHeadMountedDisplayFunctionLibrary::ResetOrientationAndPosition();
+	SpawnProjectileClient_Implementation();
+
+	// Can be used later, for server only event
+	if (IsLocallyControlled())
+	{
+
+	}
+	
 }
 
-void AMyProjectCharacter::TouchStarted(ETouchIndex::Type FingerIndex, FVector Location)
+
+void AMyProjectCharacter::SpawnProjectileClient_Implementation()
 {
-		Jump();
+
+	FProjectileDataStruct* dataTableData = ProjectileDataTable->FindRow<FProjectileDataStruct>("HighScore", "Context", true);
+
+	UWorld* p_World = GetWorld();
+
+	bool bValid = IsValid(p_World) && IsValid(ProjectileToSpawnClass);
+
+	if (bValid && dataTableData->bEnabledProjectileSpawnSystem)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.Owner = this;
+		SpawnParams.Instigator = GetInstigator();
+
+		FVector SpawnLocation = (GetActorForwardVector() * 50) + GetActorLocation();
+		AProjectileActor* Projectile = p_World->SpawnActor<AProjectileActor>(ProjectileToSpawnClass, SpawnLocation, GetActorRotation(), SpawnParams);
+		if (Projectile)
+		{
+			// Do something - 
+		}
+	}
 }
 
-void AMyProjectCharacter::TouchStopped(ETouchIndex::Type FingerIndex, FVector Location)
-{
-		StopJumping();
-}
+
 
 void AMyProjectCharacter::TurnAtRate(float Rate)
 {
@@ -137,4 +172,38 @@ void AMyProjectCharacter::MoveRight(float Value)
 		// add movement in that direction
 		AddMovementInput(Direction, Value);
 	}
+}
+
+// Get reference to our data table 
+void AMyProjectCharacter::InitDataTable()
+{
+	static ConstructorHelpers::FObjectFinder<UDataTable> DataTableToFetch(TEXT("DataTable'/Game/DataTables/ProjectileDataTable.ProjectileDataTable'"));
+	if (DataTableToFetch.Succeeded())
+	{
+		ProjectileDataTable = DataTableToFetch.Object;
+
+	}
+	else
+	{
+	// Do nothing or print error message.
+
+	}
+}
+// AI service
+void AMyProjectCharacter::SetFaceTowardsPlayer()
+{
+	FVector PlayerLocation =  UGameplayStatics::GetPlayerCharacter(this, 0)->GetActorLocation();
+	if (!IsPlayerControlled())
+	{
+		// this means AI
+		;
+		FRotator TargetRotation = UKismetMathLibrary::FindLookAtRotation(GetActorLocation(), PlayerLocation);
+		SetActorRotation(TargetRotation);
+	}
+}
+
+
+void AMyProjectCharacter::TakeDamageFromProjectile_Implementation(float damage)
+{
+	// this will be called in blueprint
 }

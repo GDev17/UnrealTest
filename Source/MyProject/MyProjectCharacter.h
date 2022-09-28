@@ -1,10 +1,20 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+
 
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/ProjectileMovementComponent.h"
+#include "ProjectileData/ProjectileActor.h"
+#include "HelperLibraries/HelperLibrary.h"
+#include <Kismet/KismetMathLibrary.h>
+#include <Kismet/GameplayStatics.h>
+#include "Engine/DataTable.h"
 #include "MyProjectCharacter.generated.h"
+
+
+// forward declarations
+struct FProjectileDataStruct;
 
 UCLASS(config=Game)
 class AMyProjectCharacter : public ACharacter
@@ -21,6 +31,8 @@ class AMyProjectCharacter : public ACharacter
 public:
 	AMyProjectCharacter();
 
+	virtual void Tick(float DeltaTime) override;
+
 	/** Base turn rate, in deg/sec. Other scaling may affect final turn rate. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category=Camera)
 	float BaseTurnRate;
@@ -30,9 +42,6 @@ public:
 	float BaseLookUpRate;
 
 protected:
-
-	/** Resets HMD orientation in VR. */
-	void OnResetVR();
 
 	/** Called for forwards/backward input */
 	void MoveForward(float Value);
@@ -52,11 +61,7 @@ protected:
 	 */
 	void LookUpAtRate(float Rate);
 
-	/** Handler for when a touch input begins. */
-	void TouchStarted(ETouchIndex::Type FingerIndex, FVector Location);
 
-	/** Handler for when a touch input stops. */
-	void TouchStopped(ETouchIndex::Type FingerIndex, FVector Location);
 
 protected:
 	// APawn interface
@@ -68,5 +73,34 @@ public:
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
+
+	/// Replication Functions
+	UFUNCTION(Server, reliable)
+	void  SpawnProjectile();
+	UFUNCTION(NetMulticast, reliable)
+	void  SpawnProjectileClient();
+
+		// Projectile class for spawn.
+		UPROPERTY(EditDefaultsOnly, Category = Projectile)
+		TSubclassOf<class AProjectileActor> ProjectileToSpawnClass;
+
+		// Function to initialize data table
+		UFUNCTION()
+		void InitDataTable();
+
+		// This variable can hold reference to our data table, Can be used to get data table reference for later.
+		UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	    class UDataTable* ProjectileDataTable;
+
+		
+		// This service is just used to face player towards player face.
+		UFUNCTION()
+		void SetFaceTowardsPlayer();
+
+
+		/// BlueprintNative event. Can be called when projectile hit to player to cause damage etc.
+		UFUNCTION(BlueprintNativeEvent, BlueprintCallable)
+		void TakeDamageFromProjectile(float damage);
+
 };
 
